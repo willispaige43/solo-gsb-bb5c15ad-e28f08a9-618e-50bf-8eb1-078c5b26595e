@@ -1,0 +1,14 @@
+services:
+  web:
+    build: .
+    container_name: accessibility-checker
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_PATH=/app/data/app.db
+    volumes:
+      - app_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  app_data:
