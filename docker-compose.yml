@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data   # SQLite 数据持久化到宿主机 ./data
+    restart: unless-stopped

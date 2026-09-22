@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>无障碍路线核验台</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #fff; --line: #e2e8f0; --text: #1e293b; --muted: #64748b;
+    --primary: #2563eb; --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --gray: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { background: #0f172a; color: #fff; padding: 14px 24px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: #94a3b8; font-size: 13px; }
+  nav { display: flex; gap: 4px; background: #1e293b; padding: 0 24px; }
+  nav button { background: none; border: none; color: #94a3b8; padding: 10px 16px; cursor: pointer;
+               font-size: 14px; border-bottom: 2px solid transparent; }
+  nav button.active { color: #fff; border-bottom-color: var(--primary); }
+  main { max-width: 1080px; margin: 20px auto; padding: 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 16px 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
+  input, select { padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; background: #fff; }
+  input:focus, select:focus { outline: 2px solid #bfdbfe; border-color: var(--primary); }
+  button.btn { background: var(--primary); color: #fff; border: none; border-radius: 6px;
+               padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  button.btn:hover { background: #1d4ed8; }
+  button.btn.ghost { background: #fff; color: var(--text); border: 1px solid var(--line); }
+  button.btn.danger { background: #fff; color: var(--bad); border: 1px solid #fecaca; padding: 4px 10px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.pass { background: #dcfce7; color: var(--ok); }
+  .badge.detour { background: #fef3c7; color: var(--warn); }
+  .badge.fail { background: #fee2e2; color: var(--bad); }
+  .badge.unreachable { background: #e2e8f0; color: var(--gray); }
+  .node-pill { display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px;
+               padding: 4px 12px; font-size: 13px; margin: 3px 0; }
+  .node-pill .floor { color: var(--muted); font-size: 11px; margin-left: 5px; }
+  .edge-chip { display: inline-block; border-radius: 6px; padding: 3px 9px; font-size: 12px; margin: 3px 4px; }
+  .edge-chip.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .edge-chip.bad { background: #fef2f2; border: 1px solid #fecaca; color: var(--bad); font-weight: 600; }
+  .path-line { line-height: 2.2; }
+  .alert { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin: 10px 0; }
+  .alert.bad { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .alert.info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .viol { color: var(--bad); font-size: 12px; }
+  .ok-text { color: var(--ok); font-size: 12px; }
+  h3.sec { font-size: 13px; color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
+  #toast { position: fixed; top: 16px; right: 16px; background: #0f172a; color: #fff; padding: 10px 16px;
+           border-radius: 8px; font-size: 13px; display: none; z-index: 99; max-width: 360px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .toolbar .spacer { flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>无障碍路线核验台</h1>
+  <span class="sub" id="settingsSummary">加载中…</span>
+</header>
+<nav>
+  <button data-tab="data" class="active">数据录入</button>
+  <button data-tab="check">路线核验</button>
+  <button data-tab="records">核验记录</button>
+</nav>
+<main>
+  <!-- ========== 数据录入 ========== -->
+  <section id="tab-data">
+    <div class="card">
+      <h2>通行设置</h2>
+      <div class="row">
+        <div><label>轮椅宽度 (mm)</label><input id="setWheelchair" type="number" min="300" max="1500" step="10" style="width:120px"></div>
+        <div><label>最大允许坡度 (%)</label><input id="setSlope" type="number" min="0.1" max="45" step="0.01" style="width:120px"></div>
+        <button class="btn" onclick="saveSettings()">保存设置</button>
+        <span class="muted">保存后，边列表的合规状态与后续核验均按新设置计算。</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>楼层节点</h2>
+      <div class="row">
+        <div><label>名称</label><input id="nodeName" placeholder="如：大厅" style="width:140px"></div>
+        <div><label>楼层</label><input id="nodeFloor" placeholder="如：1F / B1" style="width:100px"></div>
+        <div><label>类型</label>
+          <select id="nodeKind">
+            <option value="room">房间</option><option value="corridor">走廊</option>
+            <option value="lobby">大厅</option><option value="elevator">电梯厅</option>
+            <option value="outdoor">室外</option><option value="other">其他</option>
+          </select></div>
+        <button class="btn" onclick="addNode()">添加节点</button>
+        <span class="spacer" style="flex:1"></span>
+        <div><label>按楼层筛选</label><select id="nodeFloorFilter" onchange="loadNodes()"><option value="">全部楼层</option></select></div>
+      </div>
+      <table id="nodeTable"><thead><tr><th>ID</th><th>名称</th><th>楼层</th><th>类型</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>连接（走廊 / 门 / 坡道 / 电梯）</h2>
+      <div class="row">
+        <div><label>起点</label><select id="edgeFrom" style="width:150px"></select></div>
+        <div><label>终点</label><select id="edgeTo" style="width:150px"></select></div>
+        <div><label>类型</label>
+          <select id="edgeKind">
+            <option value="corridor">走廊/通道</option><option value="door">门</option>
+            <option value="ramp">坡道</option><option value="elevator">电梯</option>
+            <option value="stairs">楼梯</option>
+          </select></div>
+        <div><label>门宽 (mm，门/电梯填)</label><input id="edgeDoor" type="number" min="1" placeholder="如 900" style="width:110px"></div>
+        <div><label>坡度 (%，坡道填)</label><input id="edgeSlope" type="number" min="0" step="0.1" placeholder="如 8.3" style="width:100px"></div>
+        <div><label>双向</label><input id="edgeBi" type="checkbox" checked style="width:18px;height:18px"></div>
+        <button class="btn" onclick="addEdge()">添加连接</button>
+        <span style="flex:1"></span>
+        <div><label>按楼层筛选</label><select id="edgeFloorFilter" onchange="loadEdges()"><option value="">全部楼层</option></select></div>
+      </div>
+      <table id="edgeTable"><thead><tr><th>ID</th><th>起点</th><th>终点</th><th>类型</th><th>门宽</th><th>坡度</th><th>双向</th><th>合规性</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- ========== 路线核验 ========== -->
+  <section id="tab-check" style="display:none">
+    <div class="card">
+      <h2>发起核验</h2>
+      <div class="row">
+        <div><label>起点</label><select id="checkFrom" style="width:170px"></select></div>
+        <div><label>终点</label><select id="checkTo" style="width:170px"></select></div>
+        <button class="btn" onclick="runCheck()">开始核验</button>
+        <span class="muted">核验结果会自动保存，可在「核验记录」中复核与导出。</span>
+      </div>
+    </div>
+    <div id="checkResult"></div>
+  </section>
+
+  <!-- ========== 核验记录 ========== -->
+  <section id="tab-records" style="display:none">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">核验记录</h2>
+        <span class="spacer"></span>
+        <div><label>按楼层筛选</label><select id="checkFloorFilter" onchange="loadChecks()"><option value="">全部楼层</option></select></div>
+        <button class="btn ghost" onclick="loadChecks()">刷新</button>
+        <button class="btn" onclick="exportJson()">导出 JSON</button>
+      </div>
+      <table id="checkTable"><thead><tr><th>ID</th><th>时间</th><th>路线</th><th>结果</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div id="checkDetail"></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const NODE_KIND_LABELS = {room:'房间', corridor:'走廊', lobby:'大厅', elevator:'电梯厅', outdoor:'室外', other:'其他'};
+let nodesCache = [];
+
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._timer); t._timer = setTimeout(() => t.style.display = 'none', ms);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...opts});
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+// ---------- 选项卡 ----------
+document.querySelectorAll('nav button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b === btn));
+  ['data', 'check', 'records'].forEach(t => $('#tab-' + t).style.display = t === btn.dataset.tab ? '' : 'none');
+  if (btn.dataset.tab === 'records') loadChecks();
+  if (btn.dataset.tab === 'check') fillNodeSelects();
+}));
+
+// ---------- 设置 ----------
+async function loadSettings() {
+  const s = await api('/api/settings');
+  $('#setWheelchair').value = s.wheelchair_width_mm;
+  $('#setSlope').value = s.max_slope_percent;
+  $('#settingsSummary').textContent = `当前设置：轮椅宽 ${s.wheelchair_width_mm}mm · 最大坡度 ${s.max_slope_percent}%`;
+}
+async function saveSettings() {
+  try {
+    await api('/api/settings', {method: 'PUT', body: JSON.stringify({
+      wheelchair_width_mm: Number($('#setWheelchair').value),
+      max_slope_percent: Number($('#setSlope').value),
+    })});
+    toast('设置已保存'); await loadSettings(); await loadEdges();
+  } catch (e) { toast('保存失败：' + e.message); }
+}
+
+// ---------- 节点 ----------
+function floorOptions(sel) {
+  const cur = sel.value;
+  const floors = [...new Set(nodesCache.map(n => n.floor))].sort();
+  sel.innerHTML = '<option value="">全部楼层</option>' + floors.map(f => `<option ${f===cur?'selected':''}>${esc(f)}</option>`).join('');
+}
+function nodeOptions(sel) {
+  sel.innerHTML = nodesCache.map(n => `<option value="${n.id}">${esc(n.name)}（${esc(n.floor)}）</option>`).join('');
+}
+function fillNodeSelects() {
+  ['#edgeFrom', '#edgeTo', '#checkFrom', '#checkTo'].forEach(s => nodeOptions($(s)));
+  if (nodesCache.length > 1) $('#checkTo').selectedIndex = 1;
+}
+async function loadNodes() {
+  const floor = $('#nodeFloorFilter').value;
+  nodesCache = await api('/api/nodes' + (floor ? '?floor=' + encodeURIComponent(floor) : ''));
+  const all = floor ? await api('/api/nodes') : nodesCache;
+  const keep = nodesCache;
+  nodesCache = all; floorOptions($('#nodeFloorFilter')); floorOptions($('#edgeFloorFilter')); floorOptions($('#checkFloorFilter'));
+  fillNodeSelects();
+  $('#nodeTable tbody').innerHTML = keep.map(n => `<tr>
+    <td>${n.id}</td><td>${esc(n.name)}</td><td>${esc(n.floor)}</td>
+    <td>${NODE_KIND_LABELS[n.kind] || esc(n.kind)}</td>
+    <td><button class="btn danger" onclick="delNode(${n.id})">删除</button></td></tr>`).join('');
+}
+async function addNode() {
+  const name = $('#nodeName').value.trim(), floor = $('#nodeFloor').value.trim();
+  if (!name || !floor) return toast('请填写节点名称与楼层');
+  try {
+    await api('/api/nodes', {method: 'POST', body: JSON.stringify({name, floor, kind: $('#nodeKind').value})});
+    $('#nodeName').value = ''; toast('节点已添加');
+    await loadNodes(); await loadEdges();
+  } catch (e) { toast('添加失败：' + e.message); }
+}
+async function delNode(id) {
+  if (!confirm('删除节点将同时删除其所有连接，确定？')) return;
+  await api('/api/nodes/' + id, {method: 'DELETE'});
+  toast('节点已删除'); await loadNodes(); await loadEdges();
+}
+
+// ---------- 边 ----------
+async function loadEdges() {
+  const floor = $('#edgeFloorFilter').value;
+  const edges = await api('/api/edges' + (floor ? '?floor=' + encodeURIComponent(floor) : ''));
+  $('#edgeTable tbody').innerHTML = edges.map(e => {
+    const v = e.violations;
+    const comp = v.length ? `<span class="viol">✗ ${esc(v.join('；'))}</span>` : '<span class="ok-text">✓ 合规</span>';
+    return `<tr><td>${e.id}</td><td>${esc(e.from_name)}（${esc(e.from_floor)}）</td><td>${esc(e.to_name)}（${esc(e.to_floor)}）</td>
+      <td>${esc(e.kind_label)}</td><td>${e.door_width_mm ?? '—'}</td><td>${e.slope_percent ?? '—'}</td>
+      <td>${e.bidirectional ? '是' : '否'}</td><td>${comp}</td>
+      <td><button class="btn danger" onclick="delEdge(${e.id})">删除</button></td></tr>`;
+  }).join('');
+}
+async function addEdge() {
+  const body = {
+    from_node: Number($('#edgeFrom').value), to_node: Number($('#edgeTo').value),
+    kind: $('#edgeKind').value, bidirectional: $('#edgeBi').checked,
+    door_width_mm: $('#edgeDoor').value ? Number($('#edgeDoor').value) : null,
+    slope_percent: $('#edgeSlope').value ? Number($('#edgeSlope').value) : null,
+  };
+  if (!body.from_node || !body.to_node) return toast('请先添加至少两个节点');
+  try {
+    await api('/api/edges', {method: 'POST', body: JSON.stringify(body)});
+    $('#edgeDoor').value = ''; $('#edgeSlope').value = ''; toast('连接已添加');
+    await loadEdges();
+  } catch (e) { toast('添加失败：' + e.message); }
+}
+async function delEdge(id) {
+  await api('/api/edges/' + id, {method: 'DELETE'});
+  toast('连接已删除'); await loadEdges();
+}
+
+// ---------- 结果渲染 ----------
+function edgeChipLabel(e) {
+  const parts = [e.kind_label];
+  if (e.door_width_mm != null) parts.push(`门宽 ${e.door_width_mm}mm`);
+  if (e.slope_percent != null) parts.push(`坡度 ${e.slope_percent}%`);
+  return parts.join(' · ');
+}
+function renderPath(p) {
+  if (!p) return '<span class="muted">无路径</span>';
+  let html = '<div class="path-line">';
+  p.nodes.forEach((n, i) => {
+    if (i > 0) {
+      const e = p.edges[i - 1];
+      const bad = e.violations.length > 0;
+      html += `<span class="edge-chip ${bad ? 'bad' : 'ok'}" title="${bad ? esc(e.violations.join('；')) : '合规'}">${bad ? '⚠ ' : ''}${esc(edgeChipLabel(e))}</span>`;
+    }
+    html += `<span class="node-pill">${esc(n.name)}<span class="floor">${esc(n.floor)}</span></span>`;
+  });
+  return html + '</div>';
+}
+function renderResult(result, settings, meta) {
+  const st = result.status;
+  const mainTitle = {pass: '通行路线', detour: '推荐路线（合规绕行）', fail: '最短路线（不合规）', unreachable: '路线'}[st];
+  let html = `<div class="card">
+    ${meta ? `<div class="muted" style="margin-bottom:8px">${meta}</div>` : ''}
+    <div><span class="badge ${st}">${esc(result.status_label)}</span>
+    <span style="margin-left:10px">${esc(result.message)}</span></div>`;
+  if (settings) html += `<div class="muted" style="margin-top:6px">核验时设置：轮椅宽 ${settings.wheelchair_width_mm}mm · 最大坡度 ${settings.max_slope_percent}%</div>`;
+  if (result.path) html += `<h3 class="sec">${mainTitle}（${result.path.hops} 段）</h3>${renderPath(result.path)}`;
+  if (result.first_bad_edge) {
+    const e = result.first_bad_edge;
+    html += `<div class="alert bad"><b>首个不合规边：</b>${esc(e.from_name)} → ${esc(e.to_name)}（${esc(edgeChipLabel(e))}）<br>原因：${esc(e.violations.join('；'))}</div>`;
+  }
+  if (st === 'detour' && result.direct_path) {
+    html += `<h3 class="sec">原最短路线（含不合规边）</h3>${renderPath(result.direct_path)}`;
+  }
+  if (result.alternatives && result.alternatives.length) {
+    html += `<h3 class="sec">替代路线</h3>`;
+    result.alternatives.forEach((p, i) => {
+      const note = p.violation_count ? `<span class="viol">含 ${p.violation_count} 处不合规，整改后可通行</span>` : '<span class="ok-text">全部合规</span>';
+      html += `<div style="margin-bottom:6px"><b>方案 ${i + 1}</b>（${p.hops} 段，${note}）${renderPath(p)}</div>`;
+    });
+  }
+  return html + '</div>';
+}
+
+// ---------- 核验 ----------
+async function runCheck() {
+  const from = Number($('#checkFrom').value), to = Number($('#checkTo').value);
+  if (!from || !to) return toast('请先添加节点');
+  try {
+    const rec = await api('/api/checks', {method: 'POST', body: JSON.stringify({from_node: from, to_node: to})});
+    $('#checkResult').innerHTML = renderResult(rec.result, rec.settings,
+      `核验 #${rec.id} · ${esc(rec.created_at)} · ${esc(rec.from_label)} → ${esc(rec.to_label)} · 已保存`);
+  } catch (e) { toast('核验失败：' + e.message); }
+}
+
+// ---------- 记录 ----------
+async function loadChecks() {
+  const floor = $('#checkFloorFilter').value;
+  const list = await api('/api/checks' + (floor ? '?floor=' + encodeURIComponent(floor) : ''));
+  $('#checkTable tbody').innerHTML = list.map(c => `<tr>
+    <td>${c.id}</td><td>${esc(c.created_at)}</td>
+    <td>${esc(c.from_label)} → ${esc(c.to_label)}</td>
+    <td><span class="badge ${c.status}">${esc(c.status_label)}</span></td>
+    <td><button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="viewCheck(${c.id})">查看</button>
+        <button class="btn danger" onclick="delCheck(${c.id})">删除</button></td></tr>`).join('')
+    || '<tr><td colspan="5" class="muted">暂无记录</td></tr>';
+}
+async function viewCheck(id) {
+  const c = await api('/api/checks/' + id);
+  $('#checkDetail').innerHTML = renderResult(c.result, c.settings,
+    `核验 #${c.id} · ${esc(c.created_at)} · ${esc(c.from_label)} → ${esc(c.to_label)}`);
+  $('#checkDetail').scrollIntoView({behavior: 'smooth'});
+}
+async function delCheck(id) {
+  await api('/api/checks/' + id, {method: 'DELETE'});
+  $('#checkDetail').innerHTML = ''; toast('记录已删除'); await loadChecks();
+}
+function exportJson() {
+  const floor = $('#checkFloorFilter').value;
+  location.href = '/api/export' + (floor ? '?floor=' + encodeURIComponent(floor) : '');
+}
+
+// ---------- 启动 ----------
+(async () => {
+  try { await loadSettings(); await loadNodes(); await loadEdges(); }
+  catch (e) { toast('初始化失败：' + e.message); }
+})();
+</script>
+</body>
+</html>
